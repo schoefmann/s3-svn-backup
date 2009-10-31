@@ -1,0 +1,11 @@
+This a tiny backup script I wrote a couple of years ago.
+As I'm discontinuing my ancient blog and this article 
+still gets a lot of hits from Google, I'm redirecting 
+it here for everyone to fork.
+
+For instructions, see INSTRUCTIONS.markdown 
+(the original blog post)
+
+You should also check out this modified version which 
+has a few more features that my original one:
+http://blog.alexmace.co.uk/2007/09/28/using-amazon-s3-to-back-up-multiple-subversion-repositories/

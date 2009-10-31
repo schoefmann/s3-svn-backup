@@ -1,0 +1,92 @@
+﻿h1. Using Amazon S3 to back up your Subversion repository
+
+"Amazons' Simple Storage System":http://aws.amazon.com/s3 can be used as a cheap and secure way 
+to back up your data.
+There are several ways to perform backups to S3, like 
+"JunglDisk":http://www.jungledisk.com or "S3Sync":http://s3sync.net .
+Both of the above programs could be used to backup your
+Subversion repository: Just create a cronjob which creates snapshots
+of your repository from time to time (using hot-backup.py) and 
+sync it to S3.
+If your repository is small or commits to it happen only infrequently, 
+you might even consider doing this in the "post-commit hook":http://svnbook.red-bean.com/en/1.1/ch05s02.html#svn-ch-5-sect-2.1 .
+But if your repository is big and commits happen often, you might
+prefer an incremental approach.
+
+The latter is discussed in this article. We will use the 
+excellent "AWS::S3 ruby library":http://amazon.rubyforge.org/ from Marcel Molina Jr. 
+of "37signals":http://www.37signals.com for this task.
+
+
+h2. How to do it
+
+You will, obviously, need "Ruby":http://www.ruby-lang.org together with "RubyGems":http://www.rubygems.org .
+After that, install the AWS::S3 library with
+
+  sudo gem install aws-s3
+  
+Now, untar the contents of "s3-svn-backup.tgz":http://files.pragmatic-it.de/s3-svn-backup.tgz
+to a nice place on your subversion server and make sure <tt>s3-post-commit.rb</tt> is 
+executable for the user the subversion server runs on (this might be <tt>www</tt> or
+<tt>apache</tt> if you are using <tt>mod_dav_svn</tt>).
+
+Open <tt>s3-config.rb</tt> with your favorite text editor and change the settings 
+for <tt>AWS_ID</tt>, <tt>AWS_KEY</tt>, <tt>WORK_DIR</tt> etc.. Note that you need 
+to specify full, absolute paths here, as subversion will run the hook scripts with 
+an empty environment.
+
+You should now try to perform the initial backup (which will, depending on the 
+size of your repository, take a little while):
+
+  ./s3-post-commit.rb /path/to_your/repository
+  
+You can watch the progress with <tt>tail -f /path/to/s3-backup.log</tt>
+
+If this worked as expected, add the call to your post-commit hook in 
+<tt>path/to_your/repository/hooks/post-commit</tt> (you might have to create
+this file first by copying <tt>post-commit.tmpl</tt>).
+Open the file in your text editor and add the following line:
+
+  /absolute/path/to/s3-backup/s3-post-commit.rb "$1" "$2"
+  
+Now, try to commit some changes and check the logfile afterwards.
+
+
+h2. Caveats
+
+- These scripts should *NOT* be your only way to backup your Subversion repository. 
+  You might have other means of backing up the data on your server anyway. If not,
+  you might want to perform full backups as described in the first paragraph of this article.
+  The problem is, if one of the dump files on S3 gets corrupted or lost, you will only
+  be able to restore the revisions *below* the one in the particular file as the
+  dumps are performed with the switches <tt>--incremental</tt> and <tt>--deltas</tt>.
+
+- As of this writing, this process is only minimally tested and especially not tested 
+  on Windows servers at all (you will almost certainly encounter problems with paths with 
+  spaces here -- patches are always welcome)
+
+- These scripts work for me, but might not necessarily work for you. In contrast to 
+  the <tt>hot-backup.py</tt> script, backups only happen when the revision number changes.
+  
+- S3 is known to dislike more than 1000 objects per "bucket". This could be addressed by
+  either storing the latest revision number separately (the script just iterates through
+  all keys right now) or using multiple buckets. An useful enhancement to the scripts 
+  would also be, allowing to clean out obsolete objects when a full backup was performed.
+
+
+h2. When trouble strikes
+
+*Nothing happens on commit*
+
+
+Your post-commit hook script might not have the necessary permissions. Try sudo-ing
+it with an empty environment as the subversion user (e.g. <tt>www</tt>) and check 
+for errors (e.g. the logfile created earlier might not be writable to this user).
+
+
+*The restore fails because of character encoding issues*
+
+Try setting (and exporting) your LANG environment variable, e.g.
+
+  export LANG=en_US.UTF-8
+  
